@@ -1,6 +1,8 @@
 class SnakeGame {
     constructor() {
+        console.log('SnakeGame constructor called');
         this.canvas = document.getElementById('gameCanvas');
+        console.log('canvas:', this.canvas);
         this.ctx = this.canvas.getContext('2d');
         this.gridSize = 25;
         this.tileCount = 15;
@@ -38,19 +40,24 @@ class SnakeGame {
 
         // UI elements
         this.scoreElement = document.getElementById('score');
+        console.log('scoreElement:', this.scoreElement);
         this.highScoreElement = document.getElementById('highScore');
         this.gameOverElement = document.getElementById('gameOver');
         this.finalScoreElement = document.getElementById('finalScore');
         this.nicknameInput = document.getElementById('nickname');
         this.highscoresBody = document.getElementById('highscoresBody');
-        this.highscores = this.loadHighscores();
-        this.renderHighscores();
+        // Odstraním localStorage žebříček
+        // this.highscores = this.loadHighscores();
+        // this.renderHighscores();
+        // Načti online žebříček při startu
+        loadHighscoresOnline();
 
         // Buttons
         this.pauseBtn = document.getElementById('pauseBtn');
         this.restartBtn = document.getElementById('restartBtn');
         this.playAgainBtn = document.getElementById('playAgainBtn');
         this.soundBtn = document.getElementById('soundBtn');
+        console.log('pauseBtn:', this.pauseBtn, 'restartBtn:', this.restartBtn, 'playAgainBtn:', this.playAgainBtn, 'soundBtn:', this.soundBtn);
 
         // Zvuky
         this.audioEat = document.getElementById('audioEat');
@@ -60,6 +67,7 @@ class SnakeGame {
         this.audioCrash = document.getElementById('audioCrash');
         this.audioMusic = document.getElementById('audioMusic');
         this.audioApplause = document.getElementById('audioApplause');
+        console.log('audioEat:', this.audioEat, 'audioDiamond:', this.audioDiamond, 'audioMushroom:', this.audioMushroom, 'audioBolt:', this.audioBolt, 'audioCrash:', this.audioCrash, 'audioMusic:', this.audioMusic, 'audioApplause:', this.audioApplause);
         
         // Hlášky po game over
         this.gameOverSounds = [
@@ -272,27 +280,36 @@ class SnakeGame {
         });
 
         // Button controls
-        this.pauseBtn.addEventListener('click', () => {
-            this.enableSounds();
-            this.togglePause();
-        });
-        this.restartBtn.addEventListener('click', () => {
-            this.enableSounds();
-            this.restartGame();
-        });
-        this.playAgainBtn.addEventListener('click', () => {
-            this.enableSounds();
-            this.restartGame();
-        });
+        if (this.pauseBtn) {
+            this.pauseBtn.addEventListener('click', () => {
+                this.enableSounds();
+                this.togglePause();
+            });
+        }
+        if (this.restartBtn) {
+            this.restartBtn.addEventListener('click', () => {
+                this.enableSounds();
+                this.restartGame();
+            });
+        }
+        if (this.playAgainBtn) {
+            this.playAgainBtn.addEventListener('click', () => {
+                this.enableSounds();
+                this.restartGame();
+            });
+        }
         
         // Sound button
-        this.soundBtn.addEventListener('click', () => {
-            this.enableSounds();
-            this.toggleSound();
-        });
+        if (this.soundBtn) {
+            this.soundBtn.addEventListener('click', () => {
+                this.enableSounds();
+                this.toggleSound();
+            });
+        }
     }
 
     startGame() {
+        console.log('startGame called');
         if (!this.gameRunning) {
             this.enableSounds(); // Povol zvuky při startu hry
             this.gameRunning = true;
@@ -323,6 +340,7 @@ class SnakeGame {
     }
 
     gameLoop() {
+        console.log('gameLoop called, gameRunning:', this.gameRunning, 'gamePaused:', this.gamePaused);
         if (!this.gameRunning || this.gamePaused) return;
 
         this.update();
@@ -336,6 +354,7 @@ class SnakeGame {
     }
 
     update() {
+        console.log('update called, snake:', this.snake, 'dx:', this.dx, 'dy:', this.dy);
         // Move snake: create new head
         const newHead = {x: this.snake[0].x + this.dx, y: this.snake[0].y + this.dy, letter: null};
 
@@ -471,6 +490,7 @@ class SnakeGame {
     }
 
     draw() {
+        console.log('draw called');
         // Clear canvas
         this.ctx.fillStyle = '#f8f9fa';
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
@@ -705,15 +725,26 @@ class SnakeGame {
     }
 
     generateFood() {
-        let food;
+        // Najdi volné pole
+        let newFood;
+        let attempts = 0;
         do {
-            food = {
+            newFood = {
                 x: Math.floor(Math.random() * this.tileCount),
                 y: Math.floor(Math.random() * this.tileCount)
             };
-        } while (this.snake.some(segment => segment.x === food.x && segment.y === food.y));
-
-        return food;
+            attempts++;
+            // Ochrana proti nekonečné smyčce
+            if (attempts > 1000) {
+                console.error('Nepodařilo se najít volné místo pro jídlo!');
+                return {x: 0, y: 0}; // fallback
+            }
+        } while (
+            this.snake.some(seg => seg.x === newFood.x && seg.y === newFood.y) ||
+            (this.wall && this.wall.some(seg => seg.x === newFood.x && seg.y === newFood.y))
+        );
+        console.log('generateFood:', newFood);
+        return newFood;
     }
 
     generateDiamond() {
@@ -767,16 +798,16 @@ class SnakeGame {
         this.pauseBtn.textContent = 'Pauza';
         this.stopMusic(); // Zastav hudbu při game over
 
-        // Update high score
+        // Update high score (místní, pouze pro zobrazení)
         if (this.score > this.highScore) {
             this.highScore = this.score;
             localStorage.setItem('snakeHighScore', this.highScore);
             this.updateHighScore();
         }
 
-        // Ulož do tabulky nejlepších
-        const wasInTop5 = this.saveHighscore();
-        this.renderHighscores();
+        // Ulož do online žebříčku
+        let nickname = this.nicknameInput.value.trim() || "Hráč";
+        saveHighscoreOnline(nickname, this.score);
 
         // Show game over screen
         this.finalScoreElement.textContent = this.score;
@@ -811,63 +842,26 @@ class SnakeGame {
         }
         this.gameOverElement.classList.add('show');
         
-        // Přehrá potlesk nebo hlášku podle umístění
-        if (wasInTop5) {
-            this.playApplause(); // Potlesk pro top 5 hráče
-        } else {
-            this.playRandomGameOverSound(); // Hláška pro ostatní
-        }
-    }
-
-    saveHighscore() {
-        let nickname = this.nicknameInput.value.trim();
-        if (!nickname) nickname = 'Hráč';
-        const newEntry = { name: nickname, score: this.score };
-        let highscores = this.loadHighscores();
-        highscores.push(newEntry);
-        highscores.sort((a, b) => b.score - a.score);
-        const wasInTop5 = highscores.slice(0, 5).some(entry => 
-            entry.name === nickname && entry.score === this.score
-        );
-        highscores = highscores.slice(0, 5);
-        localStorage.setItem('vivahadHighscores', JSON.stringify(highscores));
-        this.highscores = highscores;
-        return wasInTop5;
-    }
-
-    loadHighscores() {
-        const data = localStorage.getItem('vivahadHighscores');
-        if (data) {
-            try {
-                return JSON.parse(data);
-            } catch {
-                return [];
-            }
-        }
-        return [];
-    }
-
-    renderHighscores() {
-        this.highscoresBody.innerHTML = '';
-        (this.highscores || []).forEach((entry, idx) => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = `<td>${idx + 1}.</td><td>${entry.name}</td><td>${entry.score}</td>`;
-            this.highscoresBody.appendChild(tr);
-        });
-    }
-
-    updateScore() {
-        this.scoreElement.textContent = this.score;
+        // Přehrá pouze hlášku po konci hry
+        this.playRandomGameOverSound();
     }
 
     updateHighScore() {
-        this.highScoreElement.textContent = this.highScore;
+        if (this.highScoreElement) {
+            this.highScoreElement.textContent = this.highScore;
+        }
     }
 
     updateLettersCollected() {
         // odstraněno
     }
     
+    updateScore() {
+        if (this.scoreElement) {
+            this.scoreElement.textContent = this.score;
+        }
+    }
+
     // Funkce pro resetování dat
     resetAllData() {
         console.log('Spouštím reset dat...');
@@ -878,16 +872,16 @@ class SnakeGame {
         this.updateHighScore();
         console.log('Nejlepší skóre vynulováno');
         
-        // Vynuluj top 5 hráčů
-        localStorage.removeItem('vivahadHighscores');
-        this.highscores = [];
-        this.renderHighscores();
-        console.log('Top 5 hráčů vynulováno');
+        // Vynuluj top 10 hráčů
+        // localStorage.removeItem('vivahadHighscores'); // Odstraněno
+        // this.highscores = []; // Odstraněno
+        // this.renderHighscores(); // Odstraněno
+        console.log('Top 10 hráčů vynulováno');
         
         // Zkontroluj, jestli se data skutečně smazala
         const remainingHighScore = localStorage.getItem('snakeHighScore');
-        const remainingHighscores = localStorage.getItem('vivahadHighscores');
-        console.log('Zbývající data:', { remainingHighScore, remainingHighscores });
+        // const remainingHighscores = localStorage.getItem('vivahadHighscores'); // Odstraněno
+        console.log('Zbývající data:', { remainingHighScore });
         
         // Vynuluj také aktuální stav
         this.scoreElement.textContent = '0';
@@ -896,6 +890,116 @@ class SnakeGame {
         
         console.log('Všechna data byla vynulována');
     }
+}
+
+// ZDE VLOŽ SVŮJ URL GOOGLE APPS SCRIPT (viz návod níže)
+const SHEETS_API_URL = "https://script.google.com/macros/s/AKfycbwPEKODqC_7zK_k3WJxpxhlm7tXY0TWSxaxAaFMhVOmxWeEIMDaRCG0-pIXNk6ZUKv-/exec";
+
+function saveHighscoreOnline(nickname, score) {
+    // Zkus JSONP přístup pro Google Apps Script
+    const script = document.createElement('script');
+    const callbackName = 'saveScoreCallback_' + Date.now();
+    
+    // Vytvoř globální callback funkci
+    window[callbackName] = function(response) {
+        console.log("Výsledek uložen do Google Sheets:", response);
+        loadHighscoresOnline();
+        // Vyčisti callback
+        delete window[callbackName];
+        document.head.removeChild(script);
+    };
+    
+    // Vytvoř JSONP URL
+    const jsonpUrl = `${SHEETS_API_URL}?callback=${callbackName}&action=save&nickname=${encodeURIComponent(nickname)}&score=${score}`;
+    script.src = jsonpUrl;
+    
+    // Timeout pro JSONP
+    setTimeout(() => {
+        if (window[callbackName]) {
+            console.error("JSONP timeout - použití localStorage fallback");
+            delete window[callbackName];
+            document.head.removeChild(script);
+            saveHighscoreLocal(nickname, score);
+            loadHighscoresLocal();
+        }
+    }, 5000);
+    
+    // Přidej script tag
+    document.head.appendChild(script);
+}
+
+function loadHighscoresOnline() {
+    // Zkus JSONP přístup pro načítání
+    const script = document.createElement('script');
+    const callbackName = 'loadScoresCallback_' + Date.now();
+    
+    // Vytvoř globální callback funkci
+    window[callbackName] = function(data) {
+        try {
+            if (!Array.isArray(data) || data.length < 2) {
+                console.error("Chybná data z Google Sheets:", data);
+                loadHighscoresLocal();
+                return;
+            }
+            // data je pole řádků, první řádek jsou hlavičky
+            const rows = data.slice(1);
+            // Seřadit podle skóre (sestupně)
+            rows.sort((a, b) => Number(b[1]) - Number(a[1]));
+            // Vzít top 10
+            const top10 = rows.slice(0, 10);
+            // Vykreslit do tabulky
+            const tbody = document.getElementById('highscoresBody');
+            tbody.innerHTML = '';
+            top10.forEach((row, idx) => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td>${idx + 1}.</td><td>${row[0]}</td><td>${row[1]}</td>`;
+                tbody.appendChild(tr);
+            });
+        } catch (error) {
+            console.error("Chyba při zpracování dat:", error);
+            loadHighscoresLocal();
+        }
+        
+        // Vyčisti callback
+        delete window[callbackName];
+        document.head.removeChild(script);
+    };
+    
+    // Vytvoř JSONP URL
+    const jsonpUrl = `${SHEETS_API_URL}?callback=${callbackName}&action=load`;
+    script.src = jsonpUrl;
+    
+    // Timeout pro JSONP
+    setTimeout(() => {
+        if (window[callbackName]) {
+            console.error("JSONP timeout - použití localStorage fallback");
+            delete window[callbackName];
+            document.head.removeChild(script);
+            loadHighscoresLocal();
+        }
+    }, 5000);
+    
+    // Přidej script tag
+    document.head.appendChild(script);
+}
+
+// Fallback: localStorage žebříček (pouze pokud Google Sheets selže)
+function saveHighscoreLocal(nickname, score) {
+    let highscores = JSON.parse(localStorage.getItem('vivahadHighscores') || '[]');
+    highscores.push([nickname, score]);
+    highscores.sort((a, b) => Number(b[1]) - Number(a[1]));
+    highscores = highscores.slice(0, 10);
+    localStorage.setItem('vivahadHighscores', JSON.stringify(highscores));
+}
+function loadHighscoresLocal() {
+    let highscores = JSON.parse(localStorage.getItem('vivahadHighscores') || '[]');
+    const tbody = document.getElementById('highscoresBody');
+    tbody.innerHTML = '';
+    highscores.forEach((row, idx) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${idx + 1}.</td><td>${row[0]}</td><td>${row[1]}</td>`;
+        tbody.appendChild(tr);
+    });
 }
 
 // Initialize game when page loads
